@@ -18,6 +18,8 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
 #include <glib.h>
 #include <glib-object.h>
 #include "../libseed/seed.h"
@@ -64,33 +66,70 @@ seed_exec (gchar * filename)
   SeedObject global;
   SeedScript *script;
   SeedException e;
-  gchar *buffer;
+  FILE *file;
+  GString *buffer;
+  gchar c;
 
-  g_file_get_contents (filename, &buffer, 0, 0);
-
-  if (!buffer)
+  /* If filename is NULL, read from stdin. */
+  if (filename)
     {
-      g_critical ("File %s not found!", filename);
-      exit (EXIT_FAILURE);
+      file = fopen (filename, "r");
+      if (!file)
+	{
+	  g_critical ("File %s not found!", filename);
+	  exit (EXIT_FAILURE);
+	}
     }
+  else
+    file = stdin;
 
-  if (*buffer == '#')
+  /* Ignore the first line if it begins with '#!'. */
+  c = fgetc (file);
+  if (c == '#')
     {
-      while (*buffer != '\n')
-	buffer++;
-      buffer++;
+      c = fgetc (file);
+      if (c == '!')
+	{
+	  while ((c = fgetc (file)) != EOF)
+	    {
+	      if (c == '\n' || c == '\r')
+		break;
+            }
+	}
+      else
+	{
+	  ungetc (c, file);
+	  c = '#';
+	}
     }
+  ungetc (c, file);
 
-  script = seed_make_script (eng->context, buffer, filename, 1);
+  buffer = g_string_new (NULL);
 
+  while ((c = fgetc (file)) != EOF)
+    g_string_append_c (buffer, c);
+
+  if (file != stdin)
+      fclose (file);
+
+  script = seed_make_script (eng->context, buffer->str, filename, 1);
   if ((e = seed_script_exception (script)))
     {
       g_critical ("%s", seed_exception_to_string (eng->context, e));
       exit (EXIT_FAILURE);
     }
 
-  global = seed_context_get_global_object (eng->context);
-  seed_importer_add_global (global, filename);
+  g_string_free (buffer, TRUE);
+
+  if (file != stdin)
+    {
+      /*
+       * Make the file passed to the seed binary available as
+       * imports.filename off the bat to prevent recursive running.
+       */
+      global = seed_context_get_global_object (eng->context);
+      seed_importer_add_global (global, filename);
+    }
 
   seed_evaluate (eng->context, script, 0);
   if ((e = seed_script_exception (script)))
@@ -155,10 +194,12 @@ main (gint argc, gchar ** argv)
 
   if (seed_interpreter_arg_exec_string)
     seed_exec_str ();
-  else if (argc == 1)
-    seed_repl ();
+  else if (argc > 1)
+    seed_exec (argv[1]);            /* script file */
+  else if (isatty (STDIN_FILENO))
+    seed_repl ();                   /* stdin (interactive) */
   else
-    seed_exec (argv[1]);
+    seed_exec (NULL);               /* stdin (noninteractive) */
 
   return EXIT_SUCCESS;
 }
