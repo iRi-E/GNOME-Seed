@@ -155,15 +155,18 @@ seed_exec_print_string (gchar * source)
       exit (EXIT_FAILURE);
     }
 
-  val_str = seed_value_to_string (eng->context, val, &e);
-  if (e)
+  if (!seed_value_is_undefined (eng->context, val))
     {
-      g_critical ("%s", seed_exception_to_string (eng->context, e));
-      exit (EXIT_FAILURE);
-    }
+      val_str = seed_value_to_string (eng->context, val, &e);
+      if (e)
+	{
+	  g_critical ("%s", seed_exception_to_string (eng->context, e));
+	  exit (EXIT_FAILURE);
+	}
 
-  g_print ("%s\n", val_str);
-  g_free (val_str);
+      g_print ("%s\n", val_str);
+      g_free (val_str);
+    }
 }
 
 gint
