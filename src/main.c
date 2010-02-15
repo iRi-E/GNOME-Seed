@@ -142,36 +142,28 @@ seed_exec (gchar * filename)
 }
 
 static void
-seed_exec_str ()
+seed_exec_print_string (gchar * source)
 {
   SeedException e = NULL;
   SeedValue val;
   gchar *val_str;
 
-  val =
-    seed_simple_evaluate (eng->context, seed_interpreter_arg_exec_string, &e);
-
+  val = seed_simple_evaluate (eng->context, source, &e);
   if (e)
     {
       g_critical ("%s", seed_exception_to_string (eng->context, e));
       exit (EXIT_FAILURE);
     }
-  else
+
+  val_str = seed_value_to_string (eng->context, val, &e);
+  if (e)
     {
-      val_str = seed_value_to_string (eng->context, val, &e);
-      if (e)
-	{
-	  g_critical ("%s", seed_exception_to_string (eng->context, e));
-	  exit (EXIT_FAILURE);
-	}
-
-      g_print ("%s\n", val_str);
-      g_free (seed_interpreter_arg_exec_string);
-      g_free (val_str);
-
-      exit (EXIT_SUCCESS);
+      g_critical ("%s", seed_exception_to_string (eng->context, e));
+      exit (EXIT_FAILURE);
     }
 
+  g_print ("%s\n", val_str);
+  g_free (val_str);
 }
 
 gint
@@ -184,6 +176,7 @@ main (gint argc, gchar ** argv)
 
   if (seed_interpreter_arg_print_version)
     {
+      /* --version option */
       g_print ("%s\n", "Seed " VERSION);
       exit (EXIT_SUCCESS);
     }
@@ -193,7 +186,11 @@ main (gint argc, gchar ** argv)
   seed_engine_set_search_path (eng, DEFAULT_PATH);
 
   if (seed_interpreter_arg_exec_string)
-    seed_exec_str ();
+    {
+      /* --execute option */
+      seed_exec_print_string (seed_interpreter_arg_exec_string);
+      g_free (seed_interpreter_arg_exec_string);
+    }
   else if (argc > 1)
     seed_exec (argv[1]);            /* script file */
   else if (isatty (STDIN_FILENO))
